@@ -896,6 +896,90 @@ func TestPipelineRunDescribe_cancelled_pipelinerun(t *testing.T) {
 	golden.Assert(t, actual, fmt.Sprintf("%s.golden", t.Name()))
 }
 
+func TestPipelineRunDescribe_cancelled_pipelinerun_message(t *testing.T) {
+	clock := clockwork.NewFakeClock()
+	trs := []*v1alpha1.TaskRun{
+		tb.TaskRun("tr-1",
+			tb.TaskRunNamespace("ns"),
+			tb.TaskRunStatus(
+				tb.TaskRunStartTime(clock.Now().Add(2*time.Minute)),
+				cb.TaskRunCompletionTime(clock.Now().Add(5*time.Minute)),
+				tb.StatusCondition(apis.Condition{
+					Status:  corev1.ConditionFalse,
+					Reason:  "TaskRunCancelled",
+					Message: "TaskRun \"tr-1\" was cancelled",
+				}),
+			),
+		),
+		tb.TaskRun("tr-2",
+			tb.TaskRunNamespace("ns"),
+			tb.TaskRunStatus(
+				tb.TaskRunStartTime(clock.Now().Add(2*time.Minute)),
+				cb.TaskRunCompletionTime(clock.Now().Add(5*time.Minute)),
+				tb.StatusCondition(apis.Condition{
+					Status:  corev1.ConditionFalse,
+					Reason:  "TaskRunCancelled",
+					Message: "TaskRun \"tr-2\" was cancelled",
+				}),
+			),
+		),
+	}
+	pipelineRuns := []*v1alpha1.PipelineRun{
+		tb.PipelineRun("pipeline-run",
+			tb.PipelineRunNamespace("ns"),
+			cb.PipelineRunCreationTimestamp(clock.Now()),
+			tb.PipelineRunLabel("tekton.dev/pipeline", "pipeline"),
+			tb.PipelineRunSpec("pipeline"),
+			tb.PipelineRunStatus(
+				tb.PipelineRunTaskRunsStatus("tr-1", &v1alpha1.PipelineRunTaskRunStatus{
+					PipelineTaskName: "t-1",
+					Status:           &trs[0].Status,
+				}),
+				tb.PipelineRunTaskRunsStatus("tr-2", &v1alpha1.PipelineRunTaskRunStatus{
+					PipelineTaskName: "t-2",
+					Status:           &trs[1].Status,
+				}),
+				tb.PipelineRunStatusCondition(apis.Condition{
+					Status:  corev1.ConditionFalse,
+					Reason:  "PipelineRunCancelled",
+					Message: "PipelineRun \"pipeline-run\" was cancelled",
+				}),
+				tb.PipelineRunStartTime(clock.Now()),
+				cb.PipelineRunCompletionTime(clock.Now().Add(5*time.Minute)),
+			),
+		),
+	}
+	namespaces := []*corev1.Namespace{
+		{
+			ObjectMeta: metav1.ObjectMeta{
+				Name: "ns",
+			},
+		},
+	}
+	version := "v1alpha1"
+	tdc := testDynamic.Options{}
+	dynamic, err := tdc.Client(
+		cb.UnstructuredPR(pipelineRuns[0], version),
+		cb.UnstructuredTR(trs[0], version),
+		cb.UnstructuredTR(trs[1], version),
+	)
+	if err != nil {
+		t.Errorf("unable to create dynamic client: %v", err)
+	}
+	cs, _ := test.SeedTestData(t, pipelinetest.Data{Namespaces: namespaces, PipelineRuns: pipelineRuns,
+		TaskRuns: trs,
+	})
+	cs.Pipeline.Resources = cb.APIResourceList(version, []string{"pipelinerun", "taskrun"})
+	p := &test.Params{Tekton: cs.Pipeline, Kube: cs.Kube, Dynamic: dynamic, Clock: clock}
+	pipelinerun := Command(p)
+	clock.Advance(10 * time.Minute)
+	actual, err := test.ExecuteCommand(pipelinerun, "desc", "pipeline-run", "-n", "ns")
+	if err != nil {
+		t.Errorf("Unexpected error: %v", err)
+	}
+	golden.Assert(t, actual, fmt.Sprintf("%s.golden", t.Name()))
+}
+
 func TestPipelineRunDescribe_without_tr_start_time(t *testing.T) {
 	clock := clockwork.NewFakeClock()
 

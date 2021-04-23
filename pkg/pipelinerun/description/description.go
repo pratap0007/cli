@@ -17,6 +17,7 @@ package description
 import (
 	"fmt"
 	"sort"
+	"strings"
 	"text/tabwriter"
 	"text/template"
 
@@ -213,6 +214,7 @@ func hasFailed(pr *v1beta1.PipelineRun) string {
 	}
 
 	if pr.Status.Conditions[0].Status == corev1.ConditionFalse {
+		var taskrunMessage []string
 		for _, tr := range pr.Status.TaskRuns {
 			if tr.Status == nil {
 				continue
@@ -221,9 +223,11 @@ func hasFailed(pr *v1beta1.PipelineRun) string {
 				continue
 			}
 			if tr.Status.Conditions[0].Status == corev1.ConditionFalse {
-				return fmt.Sprintf("%s (%s)", pr.Status.Conditions[0].Message,
-					tr.Status.Conditions[0].Message)
+				taskrunMessage = append(taskrunMessage, tr.Status.Conditions[0].Message)
 			}
+		}
+		if len(taskrunMessage) > 0 {
+			return fmt.Sprintf("%s (%s)", pr.Status.Conditions[0].Message, strings.Join(taskrunMessage, ","))
 		}
 		return pr.Status.Conditions[0].Message
 	}
