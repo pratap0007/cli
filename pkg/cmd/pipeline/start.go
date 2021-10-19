@@ -803,6 +803,8 @@ func parsePipeline(pipelineLocation string, httpClient http.Client) (*v1beta1.Pi
 func (opt *startOptions) getInputWorkspaces(pipeline *v1beta1.Pipeline) error {
 	for _, ws := range pipeline.Spec.Workspaces {
 		if ws.Optional {
+			continue
+		} else {
 			isOptional, err := askParam(fmt.Sprintf("Do you want to give specifications for the optional workspace `%s`: (y/N)", ws.Name), opt.askOpts)
 			if err != nil {
 				return err
