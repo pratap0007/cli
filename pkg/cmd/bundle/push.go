@@ -4,7 +4,7 @@
 // you may not use this file except in compliance with the License.
 // You may obtain a copy of the License at
 //
-//     http://www.apache.org/licenses/LICENSE-2.0
+//	http://www.apache.org/licenses/LICENSE-2.0
 //
 // Unless required by applicable law or agreed to in writing, software
 // distributed under the License is distributed on an "AS IS" BASIS,
@@ -100,7 +100,10 @@ func (p *pushOptions) parseArgsAndFlags(args []string) error {
 			continue
 		}
 
+		fmt.Println("path ====", path)
 		contents, err := ioutil.ReadFile(path)
+
+		fmt.Println("path contents", string(contents))
 		if err != nil {
 			return fmt.Errorf("failed to find and read file %s: %w", path, err)
 		}
@@ -120,6 +123,8 @@ func (p *pushOptions) Run(args []string) error {
 	if err != nil {
 		return err
 	}
+
+	fmt.Println(img.Layers())
 
 	outputDigest, err := bundle.Write(img, p.ref, p.remoteOptions.ToOptions()...)
 	if err != nil {

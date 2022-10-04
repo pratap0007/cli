@@ -28,11 +28,14 @@ func BuildTektonBundle(contents []string, log io.Writer) (v1.Image, error) {
 	// For each block of input, attempt to parse all of the YAML/JSON objects as Tekton objects and compress them into
 	// the OCI image as a tar layer.
 	for _, content := range contents {
+		fmt.Println("----------contents", string(content))
 		if err := decodeObjects(content, func(gvr *schema.GroupVersionKind, element runtime.Object, raw []byte) error {
 			name, err := getObjectName(element)
 			if err != nil {
 				return err
 			}
+
+			fmt.Println("after  gvr")
 
 			// Tar up this object before writing it to the layer.
 			var tarbundle bytes.Buffer
@@ -57,6 +60,8 @@ func BuildTektonBundle(contents []string, log io.Writer) (v1.Image, error) {
 			if err != nil {
 				return err
 			}
+
+			// mutate.AppendManifests()
 
 			// Add this layer to the image with all of the required annotations.
 			img, err = mutate.Append(img, mutate.Addendum{
