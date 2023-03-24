@@ -17,7 +17,7 @@ package taskrun
 import (
 	"sort"
 
-	"github.com/tektoncd/pipeline/pkg/apis/pipeline/v1beta1"
+	v1 "github.com/tektoncd/pipeline/pkg/apis/pipeline/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime/schema"
 )
@@ -54,7 +54,7 @@ func IsFiltered(tr Run, allowed []string) bool {
 	return len(Filter(trs, allowed)) == 0
 }
 
-func HasScheduled(trs *v1beta1.PipelineRunTaskRunStatus) bool {
+func HasScheduled(trs *v1.PipelineRunTaskRunStatus) bool {
 	if trs.Status != nil {
 		return trs.Status.PodName != ""
 	}
@@ -81,25 +81,19 @@ func Filter(trs []Run, ts []string) []Run {
 	return filtered
 }
 
-type taskRunMap map[string]*v1beta1.PipelineRunTaskRunStatus
+type taskRunMap map[string]v1.PipelineRunTaskRunStatus
 
-func SortTasksBySpecOrder(pipelineTasks []v1beta1.PipelineTask, pipelinesTaskRuns taskRunMap) []Run {
-	trNames := map[string]string{}
+func SortTasksBySpecOrder(pipelineTasks []v1.PipelineTask, trNames map[string]string, pipelinesTaskRuns taskRunMap) []Run {
 
-	for name, t := range pipelinesTaskRuns {
-		trNames[t.PipelineTaskName] = name
-	}
 	trs := Runs{}
-
 	for _, ts := range pipelineTasks {
 		if n, ok := trNames[ts.Name]; ok {
-			trStatusFields := pipelinesTaskRuns[n].Status.TaskRunStatusFields
 			trs = append(trs, Run{
 				Task:           ts.Name,
 				Name:           n,
 				Retries:        ts.Retries,
-				StartTime:      trStatusFields.StartTime,
-				CompletionTime: trStatusFields.CompletionTime,
+				StartTime:      pipelinesTaskRuns[n].Status.StartTime,
+				CompletionTime: pipelinesTaskRuns[n].Status.CompletionTime,
 			})
 		}
 	}

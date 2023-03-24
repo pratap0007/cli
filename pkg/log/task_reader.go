@@ -20,13 +20,15 @@ import (
 	"sync"
 	"time"
 
+	"github.com/tektoncd/cli/pkg/actions"
 	"github.com/tektoncd/cli/pkg/pods"
 	tr "github.com/tektoncd/cli/pkg/taskrun"
-	"github.com/tektoncd/pipeline/pkg/apis/pipeline/v1beta1"
+	v1 "github.com/tektoncd/pipeline/pkg/apis/pipeline/v1"
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/fields"
 	"k8s.io/apimachinery/pkg/runtime"
+	"k8s.io/apimachinery/pkg/runtime/schema"
 )
 
 const (
@@ -44,7 +46,8 @@ func (s *step) hasStarted() bool {
 }
 
 func (r *Reader) readTaskLog() (<-chan Log, <-chan error, error) {
-	tr, err := tr.Get(r.clients, r.run, metav1.GetOptions{}, r.ns)
+	var tr *v1.TaskRun
+	err := actions.GetV1(schema.GroupVersionResource{Group: "tekton.dev", Resource: "taskruns"}, r.clients, r.run, r.ns, metav1.GetOptions{}, &tr)
 	if err != nil {
 		return nil, nil, fmt.Errorf("%s: %s", MsgTRNotFoundErr, err)
 	}
@@ -57,7 +60,7 @@ func (r *Reader) readTaskLog() (<-chan Log, <-chan error, error) {
 	return r.readAvailableTaskLogs(tr)
 }
 
-func (r *Reader) formTaskName(tr *v1beta1.TaskRun) {
+func (r *Reader) formTaskName(tr *v1.TaskRun) {
 	if r.task != "" {
 		return
 	}
@@ -75,7 +78,7 @@ func (r *Reader) formTaskName(tr *v1beta1.TaskRun) {
 	r.task = fmt.Sprintf("Task %d", r.number)
 }
 
-func (r *Reader) readLiveTaskLogs(tr *v1beta1.TaskRun) (<-chan Log, <-chan error, error) {
+func (r *Reader) readLiveTaskLogs(tr *v1.TaskRun) (<-chan Log, <-chan error, error) {
 	podC, podErrC, err := r.getTaskRunPodNames(tr)
 	if err != nil {
 		return nil, nil, err
@@ -84,7 +87,7 @@ func (r *Reader) readLiveTaskLogs(tr *v1beta1.TaskRun) (<-chan Log, <-chan error
 	return logC, errC, nil
 }
 
-func (r *Reader) readAvailableTaskLogs(tr *v1beta1.TaskRun) (<-chan Log, <-chan error, error) {
+func (r *Reader) readAvailableTaskLogs(tr *v1.TaskRun) (<-chan Log, <-chan error, error) {
 	if !tr.HasStarted() {
 		return nil, nil, fmt.Errorf("task %s has not started yet", r.task)
 	}
@@ -211,7 +214,7 @@ func (r *Reader) readPodLogs(podC <-chan string, podErrC <-chan error, follow, t
 // updated in the status. Open a watch channel on the task run
 // and keep checking the status until the taskrun completes
 // or the timeout is reached.
-func (r *Reader) getTaskRunPodNames(run *v1beta1.TaskRun) (<-chan string, <-chan error, error) {
+func (r *Reader) getTaskRunPodNames(run *v1.TaskRun) (<-chan string, <-chan error, error) {
 	opts := metav1.ListOptions{
 		FieldSelector: fields.OneTermEqualSelector("metadata.name", r.run).String(),
 	}
@@ -350,15 +353,15 @@ func getSteps(pod *corev1.Pod) []*step {
 	return steps
 }
 
-func hasTaskRunFailed(tr *v1beta1.TaskRun, taskName string, retries int) error {
+func hasTaskRunFailed(tr *v1.TaskRun, taskName string, retries int) error {
 	if isFailure(tr, retries) {
 		return fmt.Errorf("task %s has failed: %s", taskName, tr.Status.Conditions[0].Message)
 	}
 	return nil
 }
 
-func cast2taskrun(obj runtime.Object) (*v1beta1.TaskRun, error) {
-	var run *v1beta1.TaskRun
+func cast2taskrun(obj runtime.Object) (*v1.TaskRun, error) {
+	var run *v1.TaskRun
 	unstruct, err := runtime.DefaultUnstructuredConverter.ToUnstructured(obj)
 	if err != nil {
 		return nil, err
@@ -369,16 +372,16 @@ func cast2taskrun(obj runtime.Object) (*v1beta1.TaskRun, error) {
 	return run, nil
 }
 
-func isDone(tr *v1beta1.TaskRun, retries int) bool {
+func isDone(tr *v1.TaskRun, retries int) bool {
 	return tr.IsDone() || !areRetriesScheduled(tr, retries)
 }
 
-func isFailure(tr *v1beta1.TaskRun, retries int) bool {
+func isFailure(tr *v1.TaskRun, retries int) bool {
 	conditions := tr.Status.Conditions
 	return len(conditions) != 0 && conditions[0].Status == corev1.ConditionFalse && areRetriesScheduled(tr, retries)
 }
 
-func areRetriesScheduled(tr *v1beta1.TaskRun, retries int) bool {
+func areRetriesScheduled(tr *v1.TaskRun, retries int) bool {
 	retriesDone := len(tr.Status.RetriesStatus)
 	return retriesDone >= retries
 }
